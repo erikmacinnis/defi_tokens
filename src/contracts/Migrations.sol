@@ -1,6 +1,7 @@
 pragma solidity >=0.4.21 <0.6.0;
 
-contract Migrations {
+//Created when you create a truffle project
+contract Migrations { 
   address public owner;
   uint public last_completed_migration;
 

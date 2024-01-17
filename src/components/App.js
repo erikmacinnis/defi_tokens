@@ -1,17 +1,142 @@
 import React, { Component } from 'react'
+import Web3 from 'web3'
+import DaiToken from '../abis/DaiToken.json'
+import DappToken from '../abis/DappToken.json'
+import TokenFarm from '../abis/TokenFarm.json'
 import Navbar from './Navbar'
+import Main from './Main'
 import './App.css'
 
-class App extends Component {
+class App extends Component { 
+
+  async componentDidMount(){ 
+    await this.loadWeb3()
+    await this.loadBlockChainData()
+  }
+
+  // loads the blockchain data to the state variables in the constructor
+  async loadBlockChainData(){ 
+    const web3 = window.web3
+
+    // Gets the ethereum account connected to the site
+    const accounts = await web3.eth.requestAccounts()
+    const account = accounts[0]
+    this.setState({ account }) 
+
+    // connects the networkId 
+    const networkId = await web3.eth.net.getId() 
+
+    // fetches daiTokens data
+    const daiTokenData = DaiToken.networks[networkId] 
+
+    if (daiTokenData){ // if there is data available
+
+      //DaiToken.abi is a binary file that holds all the information on DaiToken.abi 
+      // creates contract object that enables use to use the daiToken easily
+      const daiToken = new web3.eth.Contract(DaiToken.abi, daiTokenData.address) 
+      this.setState({daiToken}) 
+      let daiTokenBalance = await daiToken.methods.balanceOf(this.state.account).call() 
+      this.setState({daiTokenBalance: daiTokenBalance.toString()})
+    }
+    else {
+      window.alert('DaiToken contract not deployed to detect network')
+    }
+
+    const dappTokenData = DappToken.networks[networkId] 
+
+    if (dappTokenData){ 
+
+      const dappToken = new web3.eth.Contract(DappToken.abi, dappTokenData.address) 
+      this.setState({dappToken}) 
+      let dappTokenBalance = await dappToken.methods.balanceOf(this.state.account).call() 
+
+      this.setState({ dappTokenBalance: dappTokenBalance.toString() })
+    }
+    else {
+      window.alert('dappToken contract not deployed to detect network')
+    }
+
+    const tokenFarmData = TokenFarm.networks[networkId] 
+
+    if (tokenFarmData){ 
+ 
+      const tokenFarm = new web3.eth.Contract(TokenFarm.abi, tokenFarmData.address) 
+      this.setState({tokenFarm}) 
+      let stakingBalance = await tokenFarm.methods.stakingBalance(this.state.account).call() 
+      this.setState({ stakingBalance: stakingBalance.toString() })
+    }
+    else {
+      window.alert('tokenFarm contract not deployed to detect network')
+    }
+
+    this.setState({ loading : false })
+  }
+
+  //this function connects app to the blockchain
+  async loadWeb3(){ 
+
+    //checks if a ethereum app is connected
+    if (window.ethereum) { 
+      window.web3 = new Web3(window.ethereum)
+      await window.ethereum.enable()
+    }
+    else if (window.web33){ 
+      window.web3 = new Web3(window.web3.currentProvider)
+    }
+    else{ 
+      window.alert('Non-Ethereum browser detected. You should consider trying MetaMask!')
+    }
+  }
+  
+  // enables the stake tokens functionality on the app
+  stakeTokens = async (amount) => {
+    this.setState({ loading: true }) 
+    // approves the user
+    await this.state.daiToken.methods.approve(this.state.tokenFarm._address, amount).send({ from: this.state.account })
+    // stakes the tokens when a trasaction hash is returned
+    await this.state.tokenFarm.methods.stakeTokens(amount).send({ from: this.state.account }).on('transactionHash', (hash) => { 
+    this.setState({ loading: false}) // set loading false
+  })
+}
+
+  // enables the unstake tokens functionality on the app
+  unstakeTokens = (amount) => {
+    this.setState({loading: true })
+    this.state.tokenFarm.methods.unstakeTokens().send({ from: this.state.account }).on('transactionHash', (hash) => {
+      this.setState({ loading: false }) //once you get the transaction hash you can turn loading off
+    })
+  }
+
 
   constructor(props) {
     super(props)
     this.state = {
-      account: '0x0'
+      account: '0x0',
+      daiToken: {}, 
+      dappToken: {},
+      tokenFarm: {},
+      daiTokenBalance: '0',
+      dappTokenBalance: '0',
+      stakingBalance: '0',
+      // when false a loading screen will be displayed
+      loading: true 
     }
   }
 
   render() {
+    let content 
+    if (this.state.loading){
+      content = <p id="loader" className="text-center">Loading...</p>
+    } 
+    else{
+      content = <Main
+        daiTokenBalance={this.state.daiTokenBalance}
+        dappTokenBalance={this.state.dappTokenBalance}
+        stakingBalance={this.state.stakingBalance}
+        stakeTokens={this.stakeTokens}
+        unstakeTokens={ this.unstakeTokens }
+      />
+    }
     return (
       <div>
         <Navbar account={this.state.account} />
@@ -26,7 +151,7 @@ class App extends Component {
                 >
                 </a>
 
-                <h1>Hello, World!</h1>
+                {content}
 
               </div>
             </main>
